@@ -70,14 +70,14 @@ export function init(code, data) {
           args[0](...args.slice(2))
         }
         timer.setTimeout(handler, args[1])
-        return this.uid
+        return this.uid.toString()
       },
       setInterval: (...args) => {
         const handler = function () {
           args[0](...args.slice(2))
         }
         timer.setInterval(handler, args[1])
-        return this.uid
+        return this.uid.toString()
       },
       clearTimeout: (n) => {
         timer.clearTimeout(n)

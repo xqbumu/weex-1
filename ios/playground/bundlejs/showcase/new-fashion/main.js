@@ -785,8 +785,7 @@
 	    "height": function () {return this.navBarHeight},
 	    "backgroundColor": "#ff5898",
 	    "title": "新风尚会场",
-	    "titleColor": "white",
-	    "rightItemSrc": "http://gtms02.alicdn.com/tps/i2/TB1ED7iMpXXXXXEXXXXWA_BHXXX-48-48.png"
+	    "titleColor": "white"
 	  },
 	  "children": [
 	    {

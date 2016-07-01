@@ -141,9 +141,8 @@
 	    "backgroundColor": "#ff5898",
 	    "title": function () {return this.title},
 	    "titleColor": "white",
-	    "leftItemTitle": "More",
-	    "leftItemColor": "white",
-	    "rightItemSrc": "http://gtms02.alicdn.com/tps/i2/TB1ED7iMpXXXXXEXXXXWA_BHXXX-48-48.png"
+	    "rightItemTitle": "More",
+	    "rightItemColor": "white",
 	  },
 	  "children": [
 	    {
@@ -922,7 +921,7 @@
 	      },
 	      "shown": function () {return !this.rightItemSrc},
 	      "events": {
-	        "click": "onclickrigthitem"
+	        "click": "onclickrightitem"
 	      }
 	    },
 	    {

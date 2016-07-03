@@ -8,6 +8,7 @@
 
 #import "WXComponentManager.h"
 #import "WXComponent.h"
+#import "Layout.h"
 #import "WXComponent_internal.h"
 #import "WXComponentFactory.h"
 #import "WXDefine.h"
@@ -133,7 +134,8 @@ static NSThread *WXComponentThread;
     WXSDKInstance *instance = self.weexInstance;
     instance.rootView.wx_component = rootComponent;
     
-    _rootCSSNode = new_css_node();
+    _rootCSSNode = wx_new_css_node();
+
     if (CGRectEqualToRect(instance.frame, CGRectZero)) {
         _rootCSSNode->style.position[CSS_LEFT] = [WXConvert WXPixelType:data[@"style"][@"left"]];
         _rootCSSNode->style.position[CSS_TOP] = [WXConvert WXPixelType:data[@"style"][@"top"]];
@@ -524,14 +526,12 @@ static css_node_t * rootNodeGetChild(void *context, int i)
         return;
     }
     
-    layoutNode(_rootCSSNode, _rootCSSNode->style.dimensions[CSS_WIDTH], _rootCSSNode->style.dimensions[CSS_HEIGHT], CSS_DIRECTION_INHERIT);
-    //
-    //    if ([WXLog logLevel] >= WXLogLevelVerbose) {
-    //        print_css_node_NSLog(_cssNode);
-    //    }
+    wx_layoutNode(_rootCSSNode, _rootCSSNode->style.dimensions[CSS_WIDTH], _rootCSSNode->style.dimensions[CSS_HEIGHT], CSS_DIRECTION_INHERIT);
     
     if ([_rootComponent needsLayout]) {
-//        print_css_node(_rootCSSNode, CSS_PRINT_LAYOUT | CSS_PRINT_STYLE | CSS_PRINT_CHILDREN);
+        if ([WXLog logLevel] >= WXLogLevelVerbose) {
+            wx_print_css_node(_rootCSSNode, CSS_PRINT_LAYOUT | CSS_PRINT_STYLE | CSS_PRINT_CHILDREN);
+        }
     }
     
     NSMutableSet<WXComponent *> *dirtyComponents = [NSMutableSet set];

@@ -45,6 +45,7 @@
     if (self = [super initWithRef:ref type:type styles:styles attributes:attributes events:events weexInstance:weexInstance]) {
         _sourceURL = [NSURL URLWithString: attributes[@"src"]];
         _visible =  [WXConvert WXVisibility:styles[@"visibility"]];
+
         [self.weexInstance addObserver:self forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:nil];
     }
     

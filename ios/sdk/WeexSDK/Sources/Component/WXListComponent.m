@@ -171,7 +171,7 @@
     }
     
     [cell _fillAbsolutePositions];
-    
+
     if (![_completedCells containsObject:cell]) {
         NSIndexPath *indexPath = [NSIndexPath indexPathForRow:row inSection:0];
         [_completedCells addObject:cell];
@@ -182,7 +182,7 @@
     } else {
         row = [self adjustRowForCompletedCell:row];
         NSIndexPath *indexPath = [NSIndexPath indexPathForRow:row inSection:0];
-    
+
         WXLogInfo(@"Reload cell:%@ at row:%ld", cell.ref, (long)indexPath.row);
         [UIView performWithoutAnimation:^{
             [_tableView reloadRowsAtIndexPaths:[NSArray arrayWithObject:indexPath] withRowAnimation:UITableViewRowAnimationNone];
@@ -199,6 +199,7 @@
         WXLogWarning(@"Rendered cell:%@ has been deleted", cell);
         return;
     }
+    row = [self adjustRowForCompletedCell:row];
     
     NSIndexPath *indexPath = [NSIndexPath indexPathForRow:row inSection:0];
     

@@ -97,8 +97,8 @@
 
 - (void)dealloc
 {
-    free_css_node(_cssNode);
-
+    wx_free_css_node(_cssNode);
+    
     pthread_mutex_destroy(&_propertyMutex);
     pthread_mutexattr_destroy(&_propertMutexAttr);
 }

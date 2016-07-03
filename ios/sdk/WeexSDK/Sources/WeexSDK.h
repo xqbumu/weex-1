@@ -12,6 +12,7 @@
 #import "WXAppConfiguration.h"
 #import "WXAppMonitorProtocol.h"
 #import "WXBaseViewController.h"
+#import "WXBridgeManager.h"
 #import "WXComponent.h"
 #import "WXConvert.h"
 #import "WXDebugTool.h"
@@ -25,6 +26,7 @@
 #import "WXRootViewController.h"
 #import "WXSDKEngine.h"
 #import "WXSDKInstance.h"
+#import "WXSDKManager.h"
 #import "WXType.h"
 #import "WXUtility.h"
 

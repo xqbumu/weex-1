@@ -39,6 +39,8 @@ static NSString* WXDebugrepJSFramework;
 #ifdef DEBUG
     return YES;
 #endif
+    
+    return NO;
 }
 
 + (void)setDevToolDebug:(BOOL)isDevToolDebug {

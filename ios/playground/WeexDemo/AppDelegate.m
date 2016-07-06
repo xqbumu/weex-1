@@ -87,7 +87,7 @@
     [self atAddPlugin];
     
 #ifndef UITEST
-    [[ATManager shareInstance] show];
+    //[[ATManager shareInstance] show];
 #else
     [WXDebugTool setDebug:NO];
     [WXLog setLogLevel:WXLogLevelError];
@@ -98,7 +98,7 @@
     [WXLog setLogLevel:WXLogLevelInfo];
 #else
     [WXDebugTool setDebug:NO];
-    [[ATManager shareInstance] dismiss];
+    //[[ATManager shareInstance] dismiss];
 #endif
 
 }

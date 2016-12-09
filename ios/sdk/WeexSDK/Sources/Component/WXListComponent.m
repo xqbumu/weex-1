@@ -12,10 +12,12 @@
 #import "WXComponent_internal.h"
 #import "NSArray+Weex.h"
 #import "WXAssert.h"
+#import "WXMonitor.h"
 #import "WXUtility.h"
 #import "NSObject+WXSwizzle.h"
 #import "WXSDKInstance_private.h"
-
+#import "WXRefreshComponent.h"
+#import "WXLoadingComponent.h"
 
 @interface WXTableView : UITableView
 
@@ -59,6 +61,8 @@
 
 - (void)_frameDidCalculated:(BOOL)isChanged
 {
+    [super _frameDidCalculated:isChanged];
+    
     if (isChanged) {
         [self.list headerDidLayout:self];
     }
@@ -183,17 +187,56 @@
     // Do Nothing
 }
 
+- (void)_handleFirstScreenTime
+{
+    // Do Nothing， firstScreenTime is set by cellDidRendered:
+}
+
+- (void)scrollToComponent:(WXComponent *)component withOffset:(CGFloat)offset
+{
+    CGPoint contentOffset = _tableView.contentOffset;
+    CGFloat contentOffsetY = 0;
+    
+    WXComponent *cellComponent = component;
+    while (cellComponent) {
+        if ([cellComponent isKindOfClass:[WXCellComponent class]]) {
+            break;
+        }
+        contentOffsetY += cellComponent.calculatedFrame.origin.y;
+        cellComponent = cellComponent.supercomponent;
+    }
+    
+    NSIndexPath *toIndexPath = [self indexPathForCell:(WXCellComponent*)cellComponent sections:_completedSections];
+    CGRect cellRect = [_tableView rectForRowAtIndexPath:toIndexPath];
+    contentOffsetY += cellRect.origin.y;
+    contentOffsetY += offset * WXScreenResizeRadio();
+    
+    if (contentOffsetY > _tableView.contentSize.height - _tableView.frame.size.height) {
+        contentOffset.y = _tableView.contentSize.height - _tableView.frame.size.height;
+    } else {
+        contentOffset.y = contentOffsetY;
+    }
+    
+    [_tableView setContentOffset:contentOffset animated:YES];
+}
+
+
 #pragma mark - Inheritance
 
 - (void)_insertSubcomponent:(WXComponent *)subcomponent atIndex:(NSInteger)index
 {
-    [super _insertSubcomponent:subcomponent atIndex:index];
-    
     if ([subcomponent isKindOfClass:[WXCellComponent class]]) {
         ((WXCellComponent *)subcomponent).list = self;
     } else if ([subcomponent isKindOfClass:[WXHeaderComponent class]]) {
         ((WXHeaderComponent *)subcomponent).list = self;
+    } else if (![subcomponent isKindOfClass:[WXRefreshComponent class]]
+               && ![subcomponent isKindOfClass:[WXLoadingComponent class]]
+               && subcomponent->_positionType != WXPositionTypeFixed) {
+        WXLogError(@"list only support cell/header/refresh/loading/fixed-component as child.");
+        return;
     }
+    
+    [super _insertSubcomponent:subcomponent atIndex:index];
     
     NSIndexPath *indexPath = [self indexPathForSubIndex:index];
     if (_sections.count <= indexPath.section) {
@@ -209,7 +252,7 @@
         
         [self.weexInstance.componentManager _addUITask:^{
             [_completedSections addObject:completedSection];
-            WXLogDebug(@"Insert section:%ld",  [_completedSections indexOfObject:completedSection]);
+            WXLogDebug(@"Insert section:%ld",  (unsigned long)[_completedSections indexOfObject:completedSection]);
             [UIView performWithoutAnimation:^{
                 [_tableView insertSections:indexSet withRowAnimation:UITableViewRowAnimationNone];
             }];
@@ -232,20 +275,6 @@
         // trigger section header update
         [_tableView beginUpdates];
         [_tableView endUpdates];
-        
-        __block BOOL needCompute;
-        [_completedSections enumerateObjectsUsingBlock:^(WXSection * _Nonnull section, NSUInteger sectionIndex, BOOL * _Nonnull stop) {
-            if (header == section.header) {
-                needCompute = YES ;
-            } else if (!needCompute) {
-                return ;
-            }
-            
-            [section.rows enumerateObjectsUsingBlock:^(WXCellComponent * _Nonnull cell, NSUInteger row, BOOL * _Nonnull stop) {
-                NSIndexPath *indexPath = [NSIndexPath indexPathForRow:row inSection:sectionIndex];
-                [self _recomputeCellAbsolutePostion:cell forIndexPath:indexPath];
-            }];
-        }];
     }];
     
 }
@@ -301,22 +330,17 @@
                 [_tableView reloadRowsAtIndexPaths:[NSArray arrayWithObject:indexPath] withRowAnimation:UITableViewRowAnimationNone];
             }];
         }
-        
-        [self _recomputeCellAbsolutePostion:cell forIndexPath:indexPath];
     }];
-}
-
-- (void)_recomputeCellAbsolutePostion:(WXCellComponent *)cell forIndexPath:(NSIndexPath *)indexPath
-{
-    CGRect cellRect = [_tableView rectForRowAtIndexPath:indexPath];
-    cell.absolutePosition = CGPointMake(self.absolutePosition.x + cellRect.origin.x,
-                                        self.absolutePosition.y + cellRect.origin.y);
-    [cell _fillAbsolutePositions];
 }
 
 - (void)cellDidRendered:(WXCellComponent *)cell
 {
     WXAssertMainThread();
+    
+    if (WX_MONITOR_INSTANCE_PERF_IS_RECORDED(WXPTFirstScreenRender, self.weexInstance) && !self.weexInstance.onRenderProgress) {
+        // improve performance
+        return;
+    }
     
     NSIndexPath *indexPath = [self indexPathForCell:cell sections:_completedSections];
     if (!indexPath || indexPath.section >= [_tableView numberOfSections] ||
@@ -327,16 +351,11 @@
     
     CGRect cellRect = [_tableView rectForRowAtIndexPath:indexPath];
     if (cellRect.origin.y + cellRect.size.height >= _tableView.frame.size.height) {
-        if (self.weexInstance.screenRenderTime == 0) {
-            self.weexInstance.screenRenderTime = [[NSDate new] timeIntervalSinceDate:self.weexInstance.renderStartDate];
-        }
+        WX_MONITOR_INSTANCE_PERF_END(WXPTFirstScreenRender, self.weexInstance);
     }
     
     if (self.weexInstance.onRenderProgress) {
-        CGRect renderRect = CGRectMake(self.absolutePosition.x + cellRect.origin.x,
-                                       self.absolutePosition.y + cellRect.origin.y,
-                                       cellRect.size.width, cellRect.size.height);
-        
+        CGRect renderRect = [_tableView convertRect:cellRect toView:self.weexInstance.rootView];
         self.weexInstance.onRenderProgress(renderRect);
     }
 
@@ -382,7 +401,7 @@
     if (![visibleIndexPaths containsObject:indexPath]) {
         WXCellComponent *cell = [self cellForIndexPath:indexPath];
         // Must invoke synchronously otherwise it will remove the view just added.
-        [cell _unloadView];
+        [cell _unloadViewWithReusing:YES];
     }
 }
 
@@ -405,7 +424,7 @@
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section
 {
     WXHeaderComponent *header = ((WXSection *)_completedSections[section]).header;
-    WXLogDebug(@"header view for section %ld:%@", section, header.view);
+    WXLogDebug(@"header view for section %ld:%@", (long)section, header.view);
     return header.view;
 }
 
@@ -494,13 +513,13 @@
 {
     WXSection *section = [_completedSections wx_safeObjectAtIndex:indexPath.section];
     if (!section) {
-        WXLogError(@"No section found for num:%ld, completed sections:%ld", indexPath.section, _completedSections.count);
+        WXLogError(@"No section found for num:%ld, completed sections:%ld", (long)indexPath.section, (unsigned long)_completedSections.count);
         return nil;
     }
     
     WXCellComponent *cell = [section.rows wx_safeObjectAtIndex:indexPath.row];
     if (!cell) {
-        WXLogError(@"No cell found for num:%ld, completed rows:%ld", indexPath.row, section.rows.count);
+        WXLogError(@"No cell found for num:%ld, completed rows:%ld", (long)indexPath.row, (unsigned long)section.rows.count);
         return nil;
     }
     
@@ -543,7 +562,10 @@
     NSInteger row = -1;
     WXComponent *firstComponent;
     for (int i = 0; i <= index; i++) {
-        WXComponent* component = self.subcomponents[i];
+        WXComponent* component = [self.subcomponents wx_safeObjectAtIndex:i];
+        if (!component) {
+            continue;
+        }
         if (([component isKindOfClass:[WXHeaderComponent class]]
             || [component isKindOfClass:[WXCellComponent class]])
             && !firstComponent) {

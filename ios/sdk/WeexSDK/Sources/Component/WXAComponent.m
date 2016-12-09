@@ -34,6 +34,13 @@
     return self;
 }
 
+- (void)dealloc
+{
+    if (_tap.delegate) {
+        _tap.delegate = nil;
+    }
+}
+
 - (void)viewDidLoad
 {
     [self.view addGestureRecognizer:_tap];
@@ -58,9 +65,21 @@
 
 - (void)updateAttributes:(NSDictionary *)attributes
 {
-    if (attributes[@""]) {
+    if (attributes[@"href"]) {
         _href = attributes[@"href"];
     }
+}
+
+#pragma mark
+#pragma gesture delegate
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer
+{
+    if ([gestureRecognizer isKindOfClass:[UITapGestureRecognizer class]] && [otherGestureRecognizer isKindOfClass:[UITapGestureRecognizer class]]) {
+        return YES;
+    }
+    
+    return NO;
 }
 
 @end

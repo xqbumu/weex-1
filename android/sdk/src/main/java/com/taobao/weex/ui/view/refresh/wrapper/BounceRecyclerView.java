@@ -207,9 +207,10 @@ package com.taobao.weex.ui.view.refresh.wrapper;
 import android.content.Context;
 import android.support.v7.widget.OrientationHelper;
 import android.util.AttributeSet;
+import android.view.View;
 import android.view.ViewGroup;
-import android.widget.FrameLayout;
 
+import com.taobao.weex.common.WXThread;
 import com.taobao.weex.ui.component.WXComponent;
 import com.taobao.weex.ui.component.list.WXCell;
 import com.taobao.weex.ui.view.listview.WXRecyclerView;
@@ -220,9 +221,13 @@ import java.util.Stack;
 public class BounceRecyclerView extends BaseBounceView<WXRecyclerView> {
 
   private RecyclerViewBaseAdapter adapter = null;
-  private Stack<FrameLayout> headerViewStack = new Stack<>();
-  private Stack<FrameLayout> tempViewStack = new Stack<>();
+  private Stack<View> headerViewStack = new Stack<>();
   private Stack<WXCell> headComponentStack = new Stack<>();
+
+  @Override
+  public boolean postDelayed(Runnable action, long delayMillis) {
+    return super.postDelayed(WXThread.secure(action), delayMillis);
+  }
 
   public BounceRecyclerView(Context context, int orientation) {
     super(context, orientation);
@@ -266,9 +271,10 @@ public class BounceRecyclerView extends BaseBounceView<WXRecyclerView> {
 
   /**
    * @param component
-   * @param index
    */
-  public void notifyStickyShow(WXCell component, int index) {
+  public void notifyStickyShow(WXCell component) {
+    if (component == null)
+      return;
     if (!headComponentStack.isEmpty()) {
       WXCell oldCom = headComponentStack.pop();
       if (!oldCom.getRef().equals(component.getRef())) {
@@ -287,10 +293,11 @@ public class BounceRecyclerView extends BaseBounceView<WXRecyclerView> {
 
   /**
    * @param component
-   * @param index
    */
-  public void notifyStickyRemove(WXCell component, int index) {
-    if (!headComponentStack.isEmpty() && !headerViewStack.isEmpty() && !tempViewStack.isEmpty()) {
+  public void notifyStickyRemove(WXCell component) {
+    if (component == null)
+      return;
+    if (!headComponentStack.isEmpty() && !headerViewStack.isEmpty()) {
       removeSticky(component);
     }
   }
@@ -301,19 +308,12 @@ public class BounceRecyclerView extends BaseBounceView<WXRecyclerView> {
   private void showSticky() {
     WXCell headComponent = headComponentStack.pop();
     headComponentStack.push(headComponent);
-    FrameLayout headerView = (FrameLayout) headComponent.getView().getChildAt(0);
+    View headerView = headComponent.getRealView();
+    if (headerView == null)
+      return;
     headerViewStack.push(headerView);
-    int headerViewOffsetX = getLeft();
-    int headerViewOffsetY = getTop();
-    headComponent.getView().removeView(headerView);
-    FrameLayout tempView = new FrameLayout(getContext());
-    tempViewStack.push(tempView);
-    FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(headerView.getMeasuredWidth(),
-                                                               headerView.getMeasuredHeight());
-    headComponent.getView().addView(tempView, lp);
+    headComponent.removeSticky();
     ((ViewGroup) getParent()).addView(headerView);
-    headerView.setTranslationX(headerViewOffsetX);
-    headerView.setTranslationY(headerViewOffsetY);
   }
 
   /**
@@ -326,13 +326,9 @@ public class BounceRecyclerView extends BaseBounceView<WXRecyclerView> {
       headComponentStack.push(headComponent);
       return;
     }
-    FrameLayout tempView = tempViewStack.pop();
-    FrameLayout headerView = headerViewStack.pop();
-    headComponent.getView().removeView(tempView);
+    View headerView = headerViewStack.pop();
     ((ViewGroup) getParent()).removeView(headerView);
-    headComponent.getView().addView(headerView);
-    headerView.setTranslationX(0);
-    headerView.setTranslationY(0);
+    headComponent.recoverySticky();
   }
 
   /**
@@ -340,15 +336,11 @@ public class BounceRecyclerView extends BaseBounceView<WXRecyclerView> {
    */
   public void clearSticky() {
     int size = headComponentStack.size();
-    while (size > 0 && tempViewStack.size() == size && headerViewStack.size() == size) {
+    while (size > 0 && headerViewStack.size() == size) {
       WXCell headComponent = headComponentStack.pop();
-      FrameLayout tempView = tempViewStack.pop();
-      FrameLayout headerView = headerViewStack.pop();
-      headComponent.getView().removeView(tempView);
+      View headerView = headerViewStack.pop();
       ((ViewGroup) getParent()).removeView(headerView);
-      headComponent.getView().addView(headerView);
-      headerView.setTranslationX(0);
-      headerView.setTranslationY(0);
+      headComponent.recoverySticky();
     }
   }
 }

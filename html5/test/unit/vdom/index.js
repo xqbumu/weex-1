@@ -5,15 +5,26 @@ const { expect } = chai
 chai.use(sinonChai)
 
 global.callNative = function () {}
+global.callAddElement = function () {}
 
 import {
-  instanceMap,
   Document,
   Element,
   Comment
-} from '../../../vdom'
+} from '../../../runtime/vdom'
 
 global.callNative = function () {}
+global.callAddElement = function () {}
+
+const tempHandler = Document.handler
+
+before(() => {
+  Document.handler = global.callNative
+})
+
+after(() => {
+  Document.handler = tempHandler
+})
 
 describe('document constructor', () => {
   it('create & destroy document', () => {
@@ -21,11 +32,9 @@ describe('document constructor', () => {
     expect(doc).is.an.object
     expect(doc.id).eql('foo')
     expect(doc.URL).eql('http://path/to/url')
-    expect(instanceMap.foo).equal(doc)
     expect(doc.documentElement).is.an.object
     expect(doc.documentElement.role).equal('documentElement')
     doc.destroy()
-    expect(instanceMap.foo).is.undefined
   })
 })
 
@@ -33,7 +42,7 @@ describe('document methods', () => {
   let doc
 
   beforeEach(() => {
-    doc = new Document('foo')
+    doc = new Document('foo', null, function () {})
   })
 
   afterEach(() => {
@@ -98,7 +107,7 @@ describe('Element in document methods', () => {
   let doc, el, el2, el3
 
   beforeEach(() => {
-    doc = new Document('foo')
+    doc = new Document('foo', null, function () {})
     el = new Element('bar', {
       attr: { a: 11, b: 12 },
       style: { c: 13, d: 14 },
@@ -317,14 +326,18 @@ describe('Element in document methods', () => {
     expect(el.toJSON().attr).eql({ a: 21, b: 12 })
     el.setAttr('a', 22, true)
     expect(el.toJSON().attr).eql({ a: 22, b: 12 })
+    el.setAttr('a', 23, false)
+    expect(el.toJSON().attr).eql({ a: 23, b: 12 })
 
     el.setStyle('c', 21)
     expect(el.toJSON().style).eql({ a: 211, c: 21, d: 14 })
     el.setStyle('c', 22, true)
     expect(el.toJSON().style).eql({ a: 211, c: 22, d: 14 })
+    el.setStyle('c', 23, false)
+    expect(el.toJSON().style).eql({ a: 211, c: 23, d: 14 })
 
     el.setClassStyle({ a: 311, c: 313 })
-    expect(el.toJSON().style).eql({ a: 311, c: 22, d: 14 })
+    expect(el.toJSON().style).eql({ a: 311, c: 23, d: 14 })
 
     const handler = function () {}
     el.addEvent('click', handler)

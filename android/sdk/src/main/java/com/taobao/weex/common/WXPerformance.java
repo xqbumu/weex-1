@@ -368,6 +368,7 @@ public class WXPerformance {
     quotas.put("pureNetworkTime",(double)pureNetworkTime);
     quotas.put("syncTaskTime",(double)syncTaskTime);
     quotas.put("packageSpendTime",(double)packageSpendTime);
+    quotas.put("SDKInitTime",(double)WXEnvironment.sSDKInitTime);
     return quotas;
   }
 
@@ -401,6 +402,7 @@ public class WXPerformance {
         "templateLoadTime",
         "SDKInitInvokeTime",
         "SDKInitExecuteTime",
+        "SDKInitTime",
         "packageSpendTime",
         "syncTaskTime",
         "pureNetworkTime",
@@ -420,15 +422,27 @@ public class WXPerformance {
              + ",componentCount:" + componentCount
              + ",syncTaskTime:" + syncTaskTime
              + ",pureNetworkTime:" + pureNetworkTime
+             + ",networkTime:" + networkTime
              + ",actualNetworkTime:" + actualNetworkTime
              + ",packageSpendTime:" + packageSpendTime
              + ",connectionType:" + connectionType
              + ",requestType:" + requestType
              + ",initInvokeTime:"+WXEnvironment.sSDKInitInvokeTime+",initExecuteTime:"+WXEnvironment.sSDKInitExecuteTime
+             + ",SDKInitTime:"+ WXEnvironment.sSDKInitTime
              + ",totalTime:" + totalTime + ",JSLibVersion:" + JSLibVersion + ",WXSDKVersion:" + WXSDKVersion
              + ",errCode:" + errCode + ",renderFailedDetail:" + renderFailedDetail
              + ",errMsg:" + errMsg;
     }
     return super.toString();
+  }
+  public String getPerfData(){
+      return  "networkTime:" + networkTime
+              + " actualNetworkTime:" + actualNetworkTime
+              + " connectionType:" + connectionType
+              + " requestType:" + requestType
+              + " firstScreenRenderTime:" + screenRenderTime
+              + " firstScreenJSFExecuteTime:" + firstScreenJSFExecuteTime
+              + " componentCount:" + componentCount
+              + "  totalTime:" + totalTime;
   }
 }

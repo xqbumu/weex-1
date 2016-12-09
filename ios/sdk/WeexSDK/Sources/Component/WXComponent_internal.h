@@ -21,6 +21,7 @@
 {
 @package
     NSString *_type;
+    NSMutableArray *_subcomponents;
     /**
      *  Layout
      */
@@ -102,7 +103,7 @@
 
 - (void)_willDisplayLayer:(CALayer *)layer;
 
-- (void)_unloadView;
+- (void)_unloadViewWithReusing:(BOOL)isReusing;
 
 - (id<WXScrollerProtocol>)ancestorScroller;
 
@@ -159,5 +160,7 @@
 - (void)_setupNavBarWithStyles:(NSMutableDictionary *)styles attributes:(NSMutableDictionary *)attributes;
 
 - (void)_updateNavBarAttributes:(NSDictionary *)attributes;
+
+- (void)_handleFirstScreenTime;
 
 @end

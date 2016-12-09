@@ -206,16 +206,19 @@ package com.taobao.weex;
 
 import android.content.Context;
 import android.net.Uri;
+import android.os.Message;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ScrollView;
 
-import com.taobao.weex.adapter.DefaultWXHttpAdapter;
+import com.alibaba.fastjson.JSONObject;
 import com.taobao.weex.adapter.IWXHttpAdapter;
 import com.taobao.weex.adapter.IWXImgLoaderAdapter;
 import com.taobao.weex.adapter.IWXUserTrackAdapter;
 import com.taobao.weex.bridge.WXBridgeManager;
+import com.taobao.weex.common.Constants;
 import com.taobao.weex.common.OnWXScrollListener;
 import com.taobao.weex.common.WXErrorCode;
 import com.taobao.weex.common.WXPerformance;
@@ -223,18 +226,20 @@ import com.taobao.weex.common.WXRefreshData;
 import com.taobao.weex.common.WXRenderStrategy;
 import com.taobao.weex.common.WXRequest;
 import com.taobao.weex.common.WXResponse;
-import com.taobao.weex.common.WXRuntimeException;
+import com.taobao.weex.dom.WXDomHandler;
+import com.taobao.weex.dom.WXDomObject;
+import com.taobao.weex.dom.WXDomTask;
 import com.taobao.weex.http.WXHttpUtil;
+import com.taobao.weex.ui.component.NestedContainer;
 import com.taobao.weex.ui.component.WXComponent;
-import com.taobao.weex.ui.component.WXEventType;
 import com.taobao.weex.ui.component.WXVContainer;
 import com.taobao.weex.ui.view.WXScrollView;
 import com.taobao.weex.ui.view.WXScrollView.WXScrollViewListener;
-import com.taobao.weex.utils.WXConst;
 import com.taobao.weex.utils.WXFileUtils;
 import com.taobao.weex.utils.WXJsonUtils;
 import com.taobao.weex.utils.WXLogUtils;
 import com.taobao.weex.utils.WXReflectionUtils;
+import com.taobao.weex.utils.WXViewUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -249,17 +254,21 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public class WXSDKInstance implements IWXActivityStateListener {
 
+  //Performance
   public boolean mEnd = false;
   public static final String BUNDLE_URL = "bundleUrl";
   protected IWXUserTrackAdapter mUserTrackAdapter;
   protected IWXHttpAdapter mWXHttpAdapter;
   private IWXRenderListener mRenderListener;
-  private Context mContext;
-  private volatile String mInstanceId;
+  Context mContext;
+  volatile String mInstanceId;
   private WXComponent mGodCom;
   private boolean mRendered;
   private WXRefreshData mLastRefreshData;
   private float refreshMargin = 0;
+  private NestedInstanceInterceptor mNestedInstanceInterceptor;
+  private String mBundleUrl = "";
+  private boolean isDestroy=false;
 
   /**
    * Render strategy.
@@ -290,6 +299,12 @@ public class WXSDKInstance implements IWXActivityStateListener {
 
   private ViewGroup rootView;
 
+  public interface OnInstanceVisibleListener{
+    void onAppear();
+    void onDisappear();
+  }
+  private List<OnInstanceVisibleListener> mVisibleListeners = new ArrayList<>();
+
   public WXSDKInstance(Context context) {
     init(context);
   }
@@ -303,6 +318,26 @@ public class WXSDKInstance implements IWXActivityStateListener {
       return null;
     else
       return ((WXVContainer) (this.getGodCom())).getChild(0);
+  }
+
+  public void setNestedInstanceInterceptor(NestedInstanceInterceptor interceptor){
+    mNestedInstanceInterceptor = interceptor;
+  }
+
+  public WXSDKInstance createNestedInstance(NestedContainer container){
+    WXSDKInstance sdkInstance = new WXSDKInstance(mContext);
+    if(mNestedInstanceInterceptor != null){
+      mNestedInstanceInterceptor.onCreateNestInstance(sdkInstance,container);
+    }
+    return sdkInstance;
+  }
+
+  public void addOnInstanceVisibleListener(OnInstanceVisibleListener l){
+    mVisibleListeners.add(l);
+  }
+
+  public void removeOnInstanceVisibleListener(OnInstanceVisibleListener l){
+    mVisibleListeners.remove(l);
   }
 
   public void init(Context context) {
@@ -422,7 +457,7 @@ public class WXSDKInstance implements IWXActivityStateListener {
 
     if(WXEnvironment.sDynamicMode && !TextUtils.isEmpty(WXEnvironment.sDynamicUrl) && options!=null && options.get("dynamicMode")==null){
       options.put("dynamicMode","true");
-      renderByUrl(pageName,WXEnvironment.sDynamicUrl,options,jsonInitData,width,height,flag);
+      renderByUrl(pageName, WXEnvironment.sDynamicUrl, options, jsonInitData, width, height, flag);
       return;
     }
 
@@ -436,6 +471,10 @@ public class WXSDKInstance implements IWXActivityStateListener {
     mInstanceId = WXSDKManager.getInstance().generateInstanceId();
     WXSDKManager.getInstance().createInstance(this, template, options, jsonInitData);
     mRendered = true;
+
+    if(TextUtils.isEmpty(mBundleUrl)){
+      mBundleUrl=pageName;
+    }
   }
 
   /**
@@ -451,6 +490,7 @@ public class WXSDKInstance implements IWXActivityStateListener {
   public void renderByUrl(String pageName, final String url, Map<String, Object> options, final String jsonInitData, final int width, final int height, final WXRenderStrategy flag) {
 
     pageName = wrapPageName(pageName, url);
+    mBundleUrl = url;
 
     if (options == null) {
       options = new HashMap<String, Object>();
@@ -461,14 +501,11 @@ public class WXSDKInstance implements IWXActivityStateListener {
 
     Uri uri=Uri.parse(url);
     if(uri!=null && TextUtils.equals(uri.getScheme(),"file")){
-      render(pageName, WXFileUtils.loadFileContent(assembleFilePath(uri), mContext),options,jsonInitData,width,height,flag);
+      render(pageName, WXFileUtils.loadAsset(assembleFilePath(uri), mContext),options,jsonInitData,width,height,flag);
       return;
     }
 
     IWXHttpAdapter adapter=WXSDKManager.getInstance().getIWXHttpAdapter();
-    if (adapter == null) {
-      adapter = new DefaultWXHttpAdapter();
-    }
 
     WXRequest wxRequest = new WXRequest();
     wxRequest.url = url;
@@ -545,10 +582,6 @@ public class WXSDKInstance implements IWXActivityStateListener {
 
   public Context getContext() {
     if(mContext == null){
-      mContext = WXEnvironment.sApplication;
-      if(WXEnvironment.isApkDebugable()){
-        throw new WXRuntimeException("WXSdkInstance mContext == null");
-      }
       WXLogUtils.e("WXSdkInstance mContext == null");
     }
     return mContext;
@@ -631,14 +664,21 @@ public class WXSDKInstance implements IWXActivityStateListener {
   public void onViewDisappear(){
     WXComponent comp = getRootCom();
     if(comp != null) {
-      WXBridgeManager.getInstance().fireEvent(this.mInstanceId, comp.getRef(), WXEventType.VIEWDISAPPEAR, null, null);
+      WXBridgeManager.getInstance().fireEvent(this.mInstanceId, comp.getRef(), Constants.Event.VIEWDISAPPEAR, null, null);
+      //call disappear of nested instances
+      for(OnInstanceVisibleListener instance:mVisibleListeners){
+        instance.onDisappear();
+      }
     }
   }
 
   public void onViewAppear(){
     WXComponent comp = getRootCom();
     if(comp != null) {
-      WXBridgeManager.getInstance().fireEvent(this.mInstanceId, comp.getRef(), WXEventType.VIEWAPPEAR,null, null);
+      WXBridgeManager.getInstance().fireEvent(this.mInstanceId, comp.getRef(), Constants.Event.VIEWAPPEAR,null, null);
+      for(OnInstanceVisibleListener instance:mVisibleListeners){
+        instance.onAppear();
+      }
     }
   }
 
@@ -647,6 +687,7 @@ public class WXSDKInstance implements IWXActivityStateListener {
     for (IWXActivityStateListener listener : mActivityStateListeners) {
       listener.onActivityResume();
     }
+    onViewAppear();
   }
 
   @Override
@@ -684,7 +725,7 @@ public class WXSDKInstance implements IWXActivityStateListener {
           if (mRenderListener != null && mContext != null) {
             mGodCom = component;
             onViewAppear();
-            View wxView=component.getView();
+            View wxView=component.getHostView();
             if(WXEnvironment.isApkDebugable() && WXSDKManager.getInstance().getIWXDebugAdapter()!=null){
               wxView=WXSDKManager.getInstance().getIWXDebugAdapter().wrapContainer(WXSDKInstance.this,wxView);
             }
@@ -720,8 +761,13 @@ public class WXSDKInstance implements IWXActivityStateListener {
 
 
     mWXPerformance.totalTime = time;
+    if(mWXPerformance.screenRenderTime<0.001){
+      mWXPerformance.screenRenderTime =  time;
+    }
     mWXPerformance.componentCount = WXComponent.mComponentNum;
-    WXLogUtils.d(WXLogUtils.WEEX_PERF_TAG, "mComponentNum:" + WXComponent.mComponentNum);
+    if(WXEnvironment.isApkDebugable()) {
+      WXLogUtils.d(WXLogUtils.WEEX_PERF_TAG, "mComponentNum:" + WXComponent.mComponentNum);
+    }
     WXComponent.mComponentNum = 0;
     if (mRenderListener != null && mContext != null) {
       runOnUiThread(new Runnable() {
@@ -735,11 +781,15 @@ public class WXSDKInstance implements IWXActivityStateListener {
               WXLogUtils.d(WXLogUtils.WEEX_PERF_TAG, mWXPerformance.toString());
             }
             if (mUserTrackAdapter != null) {
-              mUserTrackAdapter.commit(mContext, null, WXConst.LOAD, mWXPerformance, null);
+              mUserTrackAdapter.commit(mContext, null, IWXUserTrackAdapter.LOAD, mWXPerformance, null);
+              commitUTStab(IWXUserTrackAdapter.JS_BRIDGE,WXErrorCode.WX_SUCCESS);
             }
           }
         }
       });
+    }
+    if(!WXEnvironment.isApkDebugable()){
+      Log.e("weex_perf",mWXPerformance.getPerfData());
     }
   }
 
@@ -845,32 +895,26 @@ public class WXSDKInstance implements IWXActivityStateListener {
    * UserTrack Log
    */
   public void commitUTStab(final String type, final WXErrorCode errorCode) {
-    if (errorCode == WXErrorCode.WX_SUCCESS) {
+    if (mUserTrackAdapter == null || TextUtils.isEmpty(type) || errorCode==null) {
       return;
     }
     runOnUiThread(new Runnable() {
-
       @Override
       public void run() {
-        if (mUserTrackAdapter == null || TextUtils.isEmpty(type)) {
-          return;
+        WXPerformance performance = null;
+        if (errorCode != WXErrorCode.WX_SUCCESS) {
+          performance = new WXPerformance();
+          performance.errCode = errorCode.getErrorCode();
+          performance.errMsg = errorCode.getErrorMsg();
+          if (WXEnvironment.isApkDebugable()) {
+            WXLogUtils.d(performance.toString());
+          }
         }
-        // Log for commit
-        if (errorCode.getErrorCode() == null && errorCode.getErrorMsg() == null) {
-          mUserTrackAdapter.commit(mContext, null, type, null, null);
-          return;
+        if( mUserTrackAdapter!= null) {
+          mUserTrackAdapter.commit(mContext, null, type, performance, null);
         }
-
-        WXPerformance perf = new WXPerformance();
-        perf.errCode = errorCode.getErrorCode();
-        perf.errMsg = errorCode.getErrorMsg();
-        if (WXEnvironment.isApkDebugable()) {
-          WXLogUtils.d(perf.toString());
-        }
-        mUserTrackAdapter.commit(mContext, null, type, perf, null);
       }
     });
-
   }
 
   private void destroyView(View rootView) {
@@ -887,16 +931,16 @@ public class WXSDKInstance implements IWXActivityStateListener {
 
       }
     } catch (Exception e) {
-      WXLogUtils.e("WXSDKInstance destroyView Exception: " + WXLogUtils.getStackTrace(e));
+      WXLogUtils.e("WXSDKInstance destroyView Exception: ", e);
     }
   }
 
-  public void destroy() {
+  public synchronized void destroy() {
     WXSDKManager.getInstance().destroyInstance(mInstanceId);
 
-    if (mGodCom != null && mGodCom.getView() != null) {
+    if (mGodCom != null && mGodCom.getHostView() != null) {
       mGodCom.destroy();
-      destroyView(mGodCom.getView());
+      destroyView(mGodCom.getHostView());
       mGodCom = null;
     }
 
@@ -905,8 +949,26 @@ public class WXSDKInstance implements IWXActivityStateListener {
       mActivityStateListeners = null;
     }
 
+    if(mGlobalEvents!=null){
+      mGlobalEvents.clear();
+    }
+
+    mNestedInstanceInterceptor = null;
+    mUserTrackAdapter = null;
+    mWXHttpAdapter = null;
+    rootView = null;
+    mScrollView = null;
     mContext = null;
     mRenderListener = null;
+    isDestroy=true;
+  }
+
+  public boolean isDestroy(){
+    return isDestroy;
+  }
+
+  public String getBundleUrl() {
+    return mBundleUrl;
   }
 
   public ViewGroup getRootView() {
@@ -936,9 +998,115 @@ public class WXSDKInstance implements IWXActivityStateListener {
     this.refreshMargin = refreshMargin;
   }
 
+  private void updateRootComponentStyle(JSONObject style) {
+
+    Message message = Message.obtain();
+    WXDomTask task = new WXDomTask();
+    task.instanceId = getInstanceId();
+    if (task.args == null) {
+      task.args = new ArrayList<>();
+    }
+    task.args.add(WXDomObject.ROOT);
+    task.args.add(style);
+    message.obj = task;
+    message.what = WXDomHandler.MsgType.WX_DOM_UPDATE_STYLE;
+    WXSDKManager.getInstance().getWXDomManager().sendMessage(message);
+  }
+
+  public void setSize(int width, int height) {
+    if (width < 0 || height < 0) {
+      return;
+    }
+    mGodViewWidth = width;
+    mGodViewHeight = height;
+    float realWidth = WXViewUtils.getWebPxByWidth(width);
+    float realHeight = WXViewUtils.getWebPxByWidth(height);
+
+    View godView = mGodCom.getHostView();
+    if (godView != null) {
+      ViewGroup.LayoutParams layoutParams = godView.getLayoutParams();
+      if (layoutParams != null) {
+        layoutParams.width = width;
+        layoutParams.height = height;
+        godView.setLayoutParams(layoutParams);
+
+        JSONObject style = new JSONObject();
+        if (mGodCom instanceof WXVContainer) {
+          WXComponent rootComponent = ((WXVContainer) mGodCom).getChild(0);
+          if (rootComponent != null && rootComponent.getDomObject() != null && rootComponent.getDomObject().isModifyHeight()) {
+            style.put(Constants.Name.HEIGHT, realHeight);
+          }
+          if (rootComponent != null && rootComponent.getDomObject() != null && rootComponent.getDomObject().isModifyWidth()) {
+            style.put(Constants.Name.WIDTH, realWidth);
+          }
+          updateRootComponentStyle(style);
+        }
+      }
+    }
+  }
+
+  /*Global Event*/
+  private HashMap<String, List<String>> mGlobalEvents = new HashMap<>();
+
+  public void fireGlobalEventCallback(String eventName, Map<String,Object> params){
+    List<String> callbacks=mGlobalEvents.get(eventName);
+    if(callbacks!=null){
+      for(String callback:callbacks){
+        WXSDKManager.getInstance().callback(mInstanceId,callback,params,true);
+      }
+    }
+  }
+
   /**
-   * load bundle js listener
+   * Fire event callback on a element.
+   * @param elementRef
+   * @param type
+   * @param data
+   * @param domChanges
    */
+  public void fireEvent(String elementRef,final String type, final Map<String, Object> data,final Map<String, Object> domChanges){
+    WXBridgeManager.getInstance().fireEventOnNode(getInstanceId(),elementRef,type,data,domChanges);
+  }
+
+  public void fireEvent(String elementRef,final String type, final Map<String, Object> data){
+    fireEvent(elementRef,type,data,null);
+  }
+
+  public void fireEvent(String ref, String type){
+    fireEvent(ref,type,new HashMap<String, Object>());
+  }
+
+  protected void addEventListener(String eventName, String callback) {
+    if (TextUtils.isEmpty(eventName) || TextUtils.isEmpty(callback)) {
+      return;
+    }
+    List<String> callbacks = mGlobalEvents.get(eventName);
+    if (callbacks == null) {
+      callbacks = new ArrayList<>();
+      mGlobalEvents.put(eventName, callbacks);
+    }
+    callbacks.add(callback);
+  }
+  protected void removeEventListener(String eventName, String callback) {
+    if (TextUtils.isEmpty(eventName) || TextUtils.isEmpty(callback)) {
+      return;
+    }
+    List<String> callbacks = mGlobalEvents.get(eventName);
+    if (callbacks != null) {
+      callbacks.remove(callback);
+    }
+  }
+
+  protected void removeEventListener(String eventName) {
+    if (TextUtils.isEmpty(eventName)) {
+      return;
+    }
+    mGlobalEvents.remove(eventName);
+  }
+
+    /**
+     * load bundle js listener
+     */
   class WXHttpListener implements IWXHttpAdapter.OnHttpListener {
 
     private String pageName;
@@ -1017,5 +1185,9 @@ public class WXSDKInstance implements IWXActivityStateListener {
       }
 
     }
+  }
+
+  public interface NestedInstanceInterceptor {
+    void onCreateNestInstance(WXSDKInstance instance, NestedContainer container);
   }
 }

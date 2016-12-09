@@ -218,6 +218,7 @@ import com.taobao.weex.WXSDKInstance;
 import com.taobao.weex.common.WXRenderStrategy;
 import com.taobao.weex.dom.WXDomObject;
 import com.taobao.weex.dom.flex.Spacing;
+import com.taobao.weex.ui.animation.WXAnimationBean;
 import com.taobao.weex.ui.animation.WXAnimationModule;
 import com.taobao.weex.ui.component.Scrollable;
 import com.taobao.weex.ui.component.WXBasicComponentType;
@@ -226,6 +227,7 @@ import com.taobao.weex.ui.component.WXComponentFactory;
 import com.taobao.weex.ui.component.WXScroller;
 import com.taobao.weex.ui.component.WXVContainer;
 import com.taobao.weex.utils.WXLogUtils;
+import com.taobao.weex.utils.WXViewUtils;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -238,7 +240,6 @@ import java.util.Map;
  */
 class WXRenderStatement {
 
-  private String mInstanceId;
   private Map<String, WXComponent> mRegistry;
   private WXSDKInstance mWXSDKInstance;
   /**
@@ -246,9 +247,8 @@ class WXRenderStatement {
    */
   private WXVContainer mGodComponent;
 
-  public WXRenderStatement(WXSDKInstance instance, String instaceId) {
+  public WXRenderStatement(WXSDKInstance instance) {
     mWXSDKInstance = instance;
-    mInstanceId = instaceId;
     mRegistry = new HashMap<>();
   }
 
@@ -302,8 +302,7 @@ class WXRenderStatement {
       return null;
     }
     WXDomObject domObject = new WXDomObject();
-    domObject.type = WXBasicComponentType.DIV;
-    domObject.ref = "god";
+    WXDomObject.prepareGod(domObject);
     mGodComponent = (WXVContainer) WXComponentFactory.newInstance(mWXSDKInstance, domObject, null);
     mGodComponent.createView(null, -1);
     if (mGodComponent == null) {
@@ -313,7 +312,7 @@ class WXRenderStatement {
       //TODO error callback
       return null;
     }
-    FrameLayout frameLayout = (FrameLayout) mGodComponent.getView();
+    FrameLayout frameLayout = (FrameLayout) mGodComponent.getHostView();
     ViewGroup.LayoutParams layoutParams = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
     frameLayout.setLayoutParams(layoutParams);
     frameLayout.setBackgroundColor(Color.TRANSPARENT);
@@ -366,7 +365,11 @@ class WXRenderStatement {
     parent.addChild(component, index);
   }
 
-  WXComponent createComponentOnDomThread(WXDomObject dom, String parentRef, int index) {
+  @Nullable WXComponent createComponentOnDomThread(WXDomObject dom, String parentRef, int index) {
+    WXComponent comp = mRegistry.get(parentRef);
+    if(comp == null || !(comp instanceof WXVContainer)){
+      return null;
+    }
     return generateComponentTree(dom, (WXVContainer) mRegistry.get(parentRef));
   }
 
@@ -395,6 +398,7 @@ class WXRenderStatement {
     WXVContainer parent = component.getParent();
     clearRegistryForComponent(component);
     parent.remove(component);
+    mRegistry.remove(ref);
     component.destroy();
     return component;
   }
@@ -407,7 +411,7 @@ class WXRenderStatement {
    * Clear registry information that current instance contains.
    */
   private void clearRegistryForComponent(WXComponent component) {
-    WXComponent removedComponent = mRegistry.remove(component.getDomObject().ref);
+    WXComponent removedComponent = mRegistry.remove(component.getDomObject().getRef());
     if (removedComponent != null) {
       removedComponent.removeAllEvent();
       removedComponent.removeStickyStyle();
@@ -492,11 +496,15 @@ class WXRenderStatement {
       return;
     }
 
-    int offsetInt = 0;
+    float offsetFloat = 0;
     if (options != null) {
       String offset = options.get("offset") == null ? "0" : options.get("offset").toString();
       if (offset != null) {
-        offsetInt = Integer.parseInt(offset);
+        try {
+          offsetFloat = WXViewUtils.getRealPxByWidth(Float.parseFloat(offset));
+        }catch (Exception e ){
+           WXLogUtils.e("Float parseFloat error :"+e.getMessage());
+        }
       }
     }
 
@@ -504,7 +512,7 @@ class WXRenderStatement {
     if (scroller == null) {
       return;
     }
-    scroller.scrollTo(component,offsetInt);
+    scroller.scrollTo(component,(int)offsetFloat);
   }
 
   /**
@@ -542,7 +550,7 @@ class WXRenderStatement {
     WXComponent component = WXComponentFactory.newInstance(mWXSDKInstance, dom,
                                                            parent, parent.isLazy());
 
-    mRegistry.put(dom.ref, component);
+    mRegistry.put(dom.getRef(), component);
     if (component instanceof WXVContainer) {
       WXVContainer parentC = (WXVContainer) component;
       int count = dom.childCount();
@@ -558,7 +566,7 @@ class WXRenderStatement {
     return component;
   }
 
-  void startAnimation(@NonNull String ref, @Nullable String callBack) {
-    WXAnimationModule.startAnimation(mWXSDKInstance,mRegistry.get(ref),callBack);
+  void startAnimation(@NonNull String ref, @NonNull WXAnimationBean animationBean, @Nullable String callBack) {
+    WXAnimationModule.startAnimation(mWXSDKInstance, mRegistry.get(ref), animationBean, callBack);
   }
 }

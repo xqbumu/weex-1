@@ -209,8 +209,10 @@ import android.content.Context;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.os.Environment;
 import android.telephony.TelephonyManager;
 
+import com.taobao.weappplus_sdk.BuildConfig;
 import com.taobao.weex.common.WXConfig;
 import com.taobao.weex.utils.LogLevel;
 import com.taobao.weex.utils.WXLogUtils;
@@ -225,13 +227,14 @@ public class WXEnvironment {
   public static final String OS = "android";
   public static final String SYS_VERSION = android.os.Build.VERSION.RELEASE;
   public static final String SYS_MODEL = android.os.Build.MODEL;
+  public static final String ENVIRONMENT = "environment";
   /*********************
    * Global config
    ***************************/
 
-  public static String JS_LIB_SDK_VERSION = "v0.13.10";
+  public static String JS_LIB_SDK_VERSION = BuildConfig.buildJavascriptFrameworkVersion;
 
-  public static String WXSDK_VERSION = "0.5.2.8";
+  public static String WXSDK_VERSION = BuildConfig.buildVersion;
   public static Application sApplication;
   public static final String DEV_Id = getDevId();
   public static int sDefaultWidth = 750;
@@ -249,10 +252,13 @@ public class WXEnvironment {
   public static String sRemoteDebugProxyUrl = "";
   public static long sJSLibInitTime = 0;
 
-  public static long sSDKInitInvokeTime = 0;//调用SDK初始化的耗时
-  public static long sSDKInitExecuteTime = 0;//SDK初始化执行耗时
+  public static long sSDKInitStart = 0;// init start timestamp
+  public static long sSDKInitInvokeTime = 0;//time cost to invoke init method
+  public static long sSDKInitExecuteTime = 0;//time cost to execute init job
+  /** from init to sdk-ready **/
+  public static long sSDKInitTime =0;
 
-  public static LogLevel sLogLevel= LogLevel.DEBUG;
+  public static LogLevel sLogLevel = LogLevel.DEBUG;
   private static boolean isApkDebug = true;
   private static boolean isPerf = false;
 
@@ -298,7 +304,7 @@ public class WXEnvironment {
       info = manager.getPackageInfo(sApplication.getPackageName(), 0);
       versionName = info.versionName;
     } catch (Exception e) {
-      WXLogUtils.e("WXEnvironment getAppVersionName Exception: " + WXLogUtils.getStackTrace(e));
+      WXLogUtils.e("WXEnvironment getAppVersionName Exception: ", e);
     }
     return versionName;
   }
@@ -336,7 +342,10 @@ public class WXEnvironment {
       isApkDebug = (info.flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
       return isApkDebug;
     } catch (Exception e) {
-      WXLogUtils.e("WXEnvironment isApkDebugable Exception: " + WXLogUtils.getStackTrace(e));
+      /**
+       * Don't call WXLogUtils.e here,will cause stackoverflow
+       */
+      e.printStackTrace();
     }
     return false;
   }
@@ -358,6 +367,20 @@ public class WXEnvironment {
     if (sApplication == null) {
       return;
     }
+  }
+
+  public static String getDiskCacheDir(Context context) {
+    if (context == null) {
+      return null;
+    }
+    String cachePath;
+    if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())
+            || !Environment.isExternalStorageRemovable()) {
+      cachePath = context.getExternalCacheDir().getPath();
+    } else {
+      cachePath = context.getCacheDir().getPath();
+    }
+    return cachePath;
   }
 
 }

@@ -13,6 +13,8 @@
 #import "WXSDKInstance_private.h"
 #import "WXLog.h"
 #import "WXModuleProtocol.h"
+#import "WXUtility.h"
+#import "WXRuleManager.h"
 
 @interface WXDomModule ()
 
@@ -27,13 +29,15 @@ WX_EXPORT_METHOD(@selector(addElement:element:atIndex:))
 WX_EXPORT_METHOD(@selector(removeElement:))
 WX_EXPORT_METHOD(@selector(moveElement:parentRef:index:))
 WX_EXPORT_METHOD(@selector(addEvent:event:))
-WX_EXPORT_METHOD(@selector(removeElement:))
+WX_EXPORT_METHOD(@selector(removeEvent:event:))
 WX_EXPORT_METHOD(@selector(createFinish))
 WX_EXPORT_METHOD(@selector(updateFinish))
 WX_EXPORT_METHOD(@selector(refreshFinish))
 WX_EXPORT_METHOD(@selector(scrollToElement:options:))
 WX_EXPORT_METHOD(@selector(updateStyle:styles:))
 WX_EXPORT_METHOD(@selector(updateAttrs:attrs:))
+WX_EXPORT_METHOD(@selector(addRule:rule:))
+
 
 - (void)performBlockOnComponentMananger:(void(^)(WXComponentManager *))block
 {
@@ -49,6 +53,14 @@ WX_EXPORT_METHOD(@selector(updateAttrs:attrs:))
         }
         [mananger startComponentTasks];
         block(mananger);
+    });
+}
+- (void)performSelectorOnRuleManager:(void(^)(void))block{
+    if (!block) {
+        return;
+    }
+    WXPerformBlockOnComponentThread(^{
+        block();
     });
 }
 
@@ -138,6 +150,16 @@ WX_EXPORT_METHOD(@selector(updateAttrs:attrs:))
 {
     [self performBlockOnComponentMananger:^(WXComponentManager *manager) {
         [manager updateAttributes:attrs forComponent:elemRef];
+    }];
+}
+
+- (void)addRule:(NSString*)type rule:(NSDictionary *)rule {
+    if ([WXUtility isBlankString:type] || ![rule count]) {
+        return;
+    }
+    
+    [self performSelectorOnRuleManager:^{
+        [[WXRuleManager sharedInstance] addRule:type rule:rule];
     }];
 }
 

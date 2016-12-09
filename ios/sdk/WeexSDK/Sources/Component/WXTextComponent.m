@@ -7,6 +7,7 @@
  */
 
 #import "WXTextComponent.h"
+#import "WXSDKInstance_private.h"
 #import "WXComponent_internal.h"
 #import "WXLayer.h"
 #import "WXUtility.h"
@@ -28,6 +29,7 @@
         
         self.opaque = NO;
         self.contentMode = UIViewContentModeRedraw;
+        self.textStorage = [NSTextStorage new];
     }
     return self;
 }
@@ -63,6 +65,14 @@
     UIGraphicsEndImageContext();
     
     return image;
+}
+
+- (void)setTextStorage:(NSTextStorage *)textStorage
+{
+    if (_textStorage != textStorage) {
+        _textStorage = textStorage;
+        [self setNeedsDisplay];
+    }
 }
 
 - (NSString *)description
@@ -176,14 +186,6 @@ do {\
     [super setNeedsLayout];
 }
 
-- (void)layoutDidFinish
-{
-    if ([self isViewLoaded]) {
-        ((WXText *)self.view).textStorage = _textStorage;
-        [self setNeedsDisplay];
-    }
-}
-
 - (void)viewDidLoad
 {
     ((WXText *)self.view).textStorage = _textStorage;
@@ -240,22 +242,6 @@ do {\
     };
 }
 
-- (void)updateStyles:(NSDictionary *)styles
-{
-    if (((WXText *)(self.view)).textStorage != _textStorage) {
-        ((WXText *)(self.view)).textStorage = _textStorage;
-        [self setNeedsDisplay];
-    }
-}
-
-- (void)updateAttributes:(NSDictionary *)attributes
-{
-    if (((WXText *)(self.view)).textStorage != _textStorage) {
-        ((WXText *)(self.view)).textStorage = _textStorage;
-        [self setNeedsDisplay];
-    }
-}
-
 #pragma mark Text Building
 - (NSString *)text
 {
@@ -284,23 +270,22 @@ do {\
     } else if(_textDecoration == WXTextDecorationLineThrough){
         [attributedString addAttribute:NSStrikethroughStyleAttributeName value:@(NSUnderlinePatternSolid | NSUnderlineStyleSingle) range:NSMakeRange(0, string.length)];
     }
+    
+    NSMutableParagraphStyle *paragraphStyle = [NSMutableParagraphStyle new];
     if (_textAlign) {
-        NSMutableParagraphStyle *paragraphStyle = [NSMutableParagraphStyle new];
         paragraphStyle.alignment = _textAlign;
-        [attributedString addAttribute:NSParagraphStyleAttributeName
-                                 value:paragraphStyle
-                                 range:(NSRange){0, attributedString.length}];
     }
     
     if (_lineHeight) {
-        NSMutableParagraphStyle *paragraphStyle = [NSMutableParagraphStyle new];
         paragraphStyle.maximumLineHeight = _lineHeight;
         paragraphStyle.minimumLineHeight = _lineHeight;
+    }
+    
+    if (_lineHeight || _textAlign) {
         [attributedString addAttribute:NSParagraphStyleAttributeName
                                  value:paragraphStyle
                                  range:(NSRange){0, attributedString.length}];
     }
-    
     
     return attributedString;
 }
@@ -339,10 +324,23 @@ do {\
     return textStorage;
 }
 
-- (void)_frameDidCalculated:(BOOL)isChanged
+- (void)syncTextStorageForView
 {
     CGFloat width = self.calculatedFrame.size.width - (_padding.left + _padding.right);
-    _textStorage = [self textStorageWithWidth:width];
+    NSTextStorage *textStorage = [self textStorageWithWidth:width];
+    
+    [self.weexInstance.componentManager  _addUITask:^{
+        if ([self isViewLoaded]) {
+            ((WXText *)self.view).textStorage = textStorage;
+            [self setNeedsDisplay];
+        }
+    }];
+}
+
+- (void)_frameDidCalculated:(BOOL)isChanged
+{
+    [super _frameDidCalculated:isChanged];
+    [self syncTextStorageForView];
 }
 
 - (void)_updateStylesOnComponentThread:(NSDictionary *)styles
@@ -351,10 +349,7 @@ do {\
     
     [self fillCSSStyles:styles];
     
-    if (!_textStorage) {
-        CGFloat width = self.calculatedFrame.size.width - (_padding.left + _padding.right);
-        _textStorage = [self textStorageWithWidth:width];
-    }
+    [self syncTextStorageForView];
 }
 
 - (void)_updateAttributesOnComponentThread:(NSDictionary *)attributes
@@ -363,10 +358,7 @@ do {\
     
     [self fillAttributes:attributes];
     
-    if (!_textStorage) {
-        CGFloat width = self.calculatedFrame.size.width - (_padding.left + _padding.right);
-        _textStorage = [self textStorageWithWidth:width];
-    }
+    [self syncTextStorageForView];
 }
 
 #ifdef UITEST

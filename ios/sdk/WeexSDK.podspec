@@ -2,11 +2,11 @@
 Pod::Spec.new do |s|
 
   s.name         = "WeexSDK"
-  s.version      = "0.6.0"
+  s.version      = "0.8.0"
   s.summary      = "WeexSDK Source ."
 
   s.description  = <<-DESC
-                   WeexSDK Source description
+                   A framework for building Mobile cross-platform UI
                    DESC
 
   s.homepage     = "https://github.com/alibaba/weex"
@@ -30,6 +30,13 @@ Pod::Spec.new do |s|
   s.prefix_header_file = 'WeexSDK/Sources/Supporting Files/WeexSDK-Prefix.pch'
 
 #  s.xcconfig = { "GCC_PREPROCESSOR_DEFINITIONS" => '$(inherited) DEBUG=1' }
-  s.frameworks = 'AVKit'
+
+  s.xcconfig = { "OTHER_LINK_FLAG" => '$(inherited) -ObjC'}
+
+  s.user_target_xcconfig  = { 'FRAMEWORK_SEARCH_PATHS' => "'$(PODS_ROOT)/WeexSDK'" }
+
+  s.frameworks = 'CoreMedia','MediaPlayer','AVFoundation','AVKit','JavaScriptCore', 'GLKit'
+
   s.dependency 'SocketRocket'
+
 end

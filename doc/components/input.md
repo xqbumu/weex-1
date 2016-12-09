@@ -1,6 +1,7 @@
 # &lt;input&gt;
 <span class="weex-version">0.4</span>
-<a href="https://github.com/weexteam/article/wiki/%E6%AC%A2%E8%BF%8E%E5%8F%82%E4%B8%8EWeex%E4%B8%AD%E6%96%87%E6%96%87%E6%A1%A3%E7%BF%BB%E8%AF%91"  class="weex-translate incomplete">cn</a>
+<a href="https://github.com/weexteam/article/issues/45"  class="weex-translate">cn</a>
+
 
 ### Summary
 
@@ -19,6 +20,7 @@ This component supports no child components.
 - `placeholder`: &lt;string&gt; a hint to the user of which can be entered to the control. The placeholder text must have no carriage returns or line-feeds.
 - `disabled`: &lt;boolean&gt; a boolean attribute indicates that the form control is not available for interaction. In particular, the click event will not be dispatched on disabled controls.
 - `autofocus`: &lt;boolean&gt; a boolean attribute lets you specify that a form control should have input focus when the page loads.
+- `maxlength`<sup class="wx-v">0.7</sup> :&lt;length&gt; a number value to specify maxlength of input
 
 Other attributes please check out the [common attributes](../references/common-attrs.md).
 

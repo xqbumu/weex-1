@@ -209,6 +209,7 @@ import android.text.TextUtils;
 import com.taobao.weex.WXSDKManager;
 import com.taobao.weex.bridge.WXBridgeManager;
 import com.taobao.weex.common.WXException;
+import com.taobao.weex.utils.WXLogUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -228,16 +229,22 @@ public class WXComponentRegistry {
     }
 
     //execute task in js thread to make sure register order is same as the order invoke register method.
-    WXBridgeManager.getInstance().getJSHandler()
-    .post(new Runnable() {
+    WXBridgeManager.getInstance()
+        .post(new Runnable() {
       @Override
       public void run() {
         try {
+          Map<String, String> registerInfo = componentInfo;
+          if (registerInfo == null){
+            registerInfo = new HashMap<>();
+          }
+
+          registerInfo.put("type",type);
           registerNativeComponent(type, holder);
-          registerJSComponent(componentInfo);
-          sComponentInfos.add(componentInfo);
+          registerJSComponent(registerInfo);
+          sComponentInfos.add(registerInfo);
         } catch (WXException e) {
-          e.printStackTrace();
+          WXLogUtils.e("register component error:", e);
         }
 
       }
@@ -246,7 +253,13 @@ public class WXComponentRegistry {
   }
 
   private static boolean registerNativeComponent(String type, IFComponentHolder holder) throws WXException {
-    sTypeComponentMap.put(type, holder);
+    try {
+      holder.loadIfNonLazy();
+      sTypeComponentMap.put(type, holder);
+    }catch (ArrayStoreException e){
+      e.printStackTrace();
+      //ignore: ArrayStoreException: java.lang.String cannot be stored in an array of type java.util.HashMap$HashMapEntry[]
+    }
     return true;
   }
 
@@ -262,7 +275,7 @@ public class WXComponentRegistry {
   }
 
   public static void reload(){
-    WXBridgeManager.getInstance().getJSHandler().post(new Runnable() {
+    WXBridgeManager.getInstance().post(new Runnable() {
       @Override
       public void run() {
         try {
@@ -270,7 +283,7 @@ public class WXComponentRegistry {
             registerJSComponent(com);
           }
         } catch (WXException e) {
-          e.printStackTrace();
+          WXLogUtils.e("", e);
         }
       }
     });

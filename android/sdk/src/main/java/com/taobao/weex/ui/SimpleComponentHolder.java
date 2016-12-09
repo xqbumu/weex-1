@@ -204,6 +204,7 @@
  */
 package com.taobao.weex.ui;
 
+import com.taobao.weex.WXEnvironment;
 import com.taobao.weex.WXSDKInstance;
 import com.taobao.weex.bridge.Invoker;
 import com.taobao.weex.bridge.MethodInvoker;
@@ -229,11 +230,63 @@ public class SimpleComponentHolder implements IFComponentHolder{
   public static final String TAG = "SimpleComponentHolder";
   private final Class<? extends WXComponent> mClz;
   private Map<String, Invoker> mMethods;
-  private Constructor<? extends WXComponent> mConstructor;
+  private ComponentCreator mCreator;
+
+  static class ClazzComponentCreator implements ComponentCreator{
+
+    private Constructor<? extends WXComponent> mConstructor;
+    private final Class<? extends WXComponent> mCompClz;
+
+    ClazzComponentCreator(Class<? extends WXComponent> c){
+      mCompClz = c;
+    }
+
+    private void loadConstructor(){
+      Class<? extends WXComponent> c = mCompClz;
+      Constructor<? extends WXComponent> constructor;
+      try {
+        constructor = c.getConstructor(WXSDKInstance.class, WXDomObject.class, WXVContainer.class, boolean.class);
+      } catch (NoSuchMethodException e) {
+        WXLogUtils.d("ClazzComponentCreator","Use deprecated component constructor");
+        try {
+          //compatible deprecated constructor
+          constructor = c.getConstructor(WXSDKInstance.class, WXDomObject.class, WXVContainer.class,String.class, boolean.class);
+        } catch (NoSuchMethodException e1) {
+          throw new WXRuntimeException("Can't find constructor of component.");
+        }
+      }
+      mConstructor = constructor;
+    }
+
+    @Override
+    public WXComponent createInstance(WXSDKInstance instance, WXDomObject node, WXVContainer parent, boolean lazy) throws IllegalAccessException, InvocationTargetException, InstantiationException {
+      if(mConstructor == null){
+        loadConstructor();
+      }
+      int parameters = mConstructor.getParameterTypes().length;
+      WXComponent component;
+      if(parameters == 4){
+        component =  mConstructor.newInstance(instance,node,parent,lazy);
+      }else{
+        //compatible deprecated constructor
+        component =  mConstructor.newInstance(instance,node,parent,instance.getInstanceId(),lazy);
+      }
+      return component;
+    }
+  }
 
   public SimpleComponentHolder(Class<? extends WXComponent> clz) {
+    this(clz,new ClazzComponentCreator(clz));
+  }
+
+  public SimpleComponentHolder(Class<? extends WXComponent> clz,ComponentCreator customCreator) {
     this.mClz = clz;
-    Annotation[] annotations = clz.getDeclaredAnnotations();
+    this.mCreator = customCreator;
+  }
+
+  @Override
+  public void loadIfNonLazy() {
+    Annotation[] annotations = mClz.getDeclaredAnnotations();
     for (Annotation annotation :
       annotations) {
       if (annotation instanceof Component){
@@ -246,54 +299,47 @@ public class SimpleComponentHolder implements IFComponentHolder{
   }
 
   private synchronized void generate(){
-    WXLogUtils.d(TAG,"Generate Component:"+mClz.getSimpleName());
+    if(WXEnvironment.isApkDebugable()) {
+      WXLogUtils.d(TAG, "Generate Component:" + mClz.getSimpleName());
+    }
+
+    mMethods = getMethods(mClz);
+  }
+
+  static Map<String,Invoker> getMethods(Class clz){
     HashMap<String, Invoker> methods = new HashMap<>();
 
     Annotation[] annotations;
     Annotation anno;
-    for (Method method : mClz.getMethods()) {
-      annotations = method.getDeclaredAnnotations();
-      for (int i = 0,annotationsCount = annotations.length;
-           i < annotationsCount; ++i) {
-        anno = annotations[i];
-        if (anno != null && anno instanceof WXComponentProp) {
-          String name = ((WXComponentProp) anno).name();
-          methods.put(name, new MethodInvoker(method));
-          break;
+    try {
+      for (Method method : clz.getMethods()) {
+        try {
+          annotations = method.getDeclaredAnnotations();
+          for (int i = 0, annotationsCount = annotations.length;
+               i < annotationsCount; ++i) {
+            anno = annotations[i];
+            if (anno != null && anno instanceof WXComponentProp) {
+              String name = ((WXComponentProp) anno).name();
+              methods.put(name, new MethodInvoker(method));
+              break;
+            }
+          }
+        } catch (ArrayIndexOutOfBoundsException | IncompatibleClassChangeError e) {
+          //ignore: getDeclaredAnnotations may throw this
         }
       }
-    }
-
-    mMethods = methods;
-    try {
-      mConstructor = mClz.getConstructor(WXSDKInstance.class, WXDomObject.class, WXVContainer.class, boolean.class);
-    } catch (NoSuchMethodException e) {
-      try {
-        //compatible deprecated constructor
-        mConstructor = mClz.getConstructor(WXSDKInstance.class, WXDomObject.class, WXVContainer.class,String.class, boolean.class);
-      } catch (NoSuchMethodException e1) {
-        e1.printStackTrace();
-        throw new WXRuntimeException("Can't find constructor of component.");
-      }
+    }catch (IndexOutOfBoundsException e){
       e.printStackTrace();
+      //ignore: getMethods may throw this
     }
+    return methods;
   }
 
 
 
   @Override
   public synchronized WXComponent createInstance(WXSDKInstance instance, WXDomObject node, WXVContainer parent, boolean lazy) throws IllegalAccessException, InvocationTargetException, InstantiationException {
-    if (mConstructor == null) {
-      generate();
-    }
-    int parameters = mConstructor.getParameterTypes().length;
-    WXComponent component;
-    if(parameters == 4){
-      component =  mConstructor.newInstance(instance,node,parent,lazy);
-    }else{
-      //compatible deprecated constructor
-      component =  mConstructor.newInstance(instance,node,parent,instance.getInstanceId(),lazy);
-    }
+    WXComponent component = mCreator.createInstance(instance,node,parent,lazy);
 
     component.bindHolder(this);
     return component;

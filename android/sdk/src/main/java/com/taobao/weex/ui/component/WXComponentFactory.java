@@ -224,17 +224,16 @@ public class WXComponentFactory {
   }
 
   public static WXComponent newInstance(WXSDKInstance instance, WXDomObject node, WXVContainer parent, boolean lazy) {
-    if (instance == null || node == null || TextUtils.isEmpty(node.type) ) {
+    if (instance == null || node == null || TextUtils.isEmpty(node.getType()) ) {
       return null;
     }
 
-    IFComponentHolder holder = WXComponentRegistry.getComponent(node.type);
+    IFComponentHolder holder = WXComponentRegistry.getComponent(node.getType());
     if (holder == null) {
       if (WXEnvironment.isApkDebugable()) {
-        StringBuilder tag = new StringBuilder();
-        tag.append("WXComponentFactory error type:[");
-        tag.append(node.type).append("]").append(" class not found");
-        WXLogUtils.e(tag.toString());
+        String tag = "WXComponentFactory error type:[" +
+                node.getType() + "]" + " class not found";
+        WXLogUtils.e(tag);
       }
       //For compatible reason of JS framework, unregistered type will be treated as container.
       holder = WXComponentRegistry.getComponent(WXBasicComponentType.CONTAINER);
@@ -246,12 +245,7 @@ public class WXComponentFactory {
     try {
       return holder.createInstance(instance, node, parent, lazy);
     } catch (Exception e) {
-      if (WXEnvironment.isApkDebugable()) {
-        StringBuilder builder = new StringBuilder("WXComponentFactory Exception type:[");
-        builder.append(node.type).append("] ");
-        builder.append(WXLogUtils.getStackTrace(e));
-        WXLogUtils.e(builder.toString());
-      }
+      WXLogUtils.e("WXComponentFactory Exception type:[" + node.getType() + "] ", e);
     }
 
     return null;

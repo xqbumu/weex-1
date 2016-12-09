@@ -208,6 +208,7 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import com.taobao.weex.WXSDKInstance;
+import com.taobao.weex.common.Constants;
 import com.taobao.weex.dom.WXDomObject;
 
 import java.util.ArrayList;
@@ -215,13 +216,27 @@ import java.util.ArrayList;
 /**
  * All container components must implement this class
  */
-public abstract class WXVContainer extends WXComponent {
+public abstract class WXVContainer<T extends ViewGroup> extends WXComponent<T> {
 
   private static final String TAG="WXVContainer";
   protected ArrayList<WXComponent> mChildren = new ArrayList<>();
 
+  @Deprecated
+  public WXVContainer(WXSDKInstance instance, WXDomObject dom, WXVContainer parent, String instanceId, boolean isLazy) {
+    this(instance,dom,parent,isLazy);
+  }
+
   public WXVContainer(WXSDKInstance instance, WXDomObject node, WXVContainer parent, boolean lazy) {
     super(instance, node, parent, lazy);
+  }
+
+  /**
+   * use {@link #getHostView()} instead
+   * @return
+   */
+  @Deprecated
+  public ViewGroup getView(){
+    return getHostView();
   }
 
   @Override
@@ -261,6 +276,18 @@ public abstract class WXVContainer extends WXComponent {
     }
   }
 
+  @Override
+  public void refreshData(WXComponent component) {
+      if (component == null) {
+        component = this;
+      }
+      super.refreshData(component);
+      int count = childCount();
+      for (int i = 0; i < count; i++) {
+        getChild(i).refreshData(((WXVContainer)component).getChild(i));
+      }
+  }
+
   /**
    * return real View
    */
@@ -272,19 +299,13 @@ public abstract class WXVContainer extends WXComponent {
   @Override
   public void createViewImpl(WXVContainer parent, int index) {
     super.createViewImpl(parent, index);
-    getOrCreateBorder().attachView(mHost);
     int count = childCount();
     for (int i = 0; i < count; ++i) {
       getChild(i).createViewImpl(this, i);
     }
-    if(getView()!=null){
-       getView().setClipToPadding(false);
+    if(getHostView()!=null){
+       getHostView().setClipToPadding(false);
     }
-  }
-
-  @Override
-  public ViewGroup getView() {
-    return (ViewGroup) super.getView();
   }
 
   @Override
@@ -317,6 +338,10 @@ public abstract class WXVContainer extends WXComponent {
 
   public WXComponent getChild(int index) {
     return mChildren.get(index);
+  }
+
+  public int getChildCount() {
+    return mChildren.size();
   }
 
   public void addChild(WXComponent child) {
@@ -360,12 +385,12 @@ public abstract class WXVContainer extends WXComponent {
     }
 
     mChildren.remove(child);
-    if(mInstance!=null
-            &&mInstance.getRootView()!=null
-            && child.mDomObj.isFixed()){
-      mInstance.getRootView().removeView(child.getView());
+    if(getInstance()!=null
+            &&getInstance().getRootView()!=null
+            && child.getDomObject().isFixed()){
+      getInstance().getRootView().removeView(child.getHostView());
     }else if(getRealView() != null) {
-      getRealView().removeView(child.getView());
+      getRealView().removeView(child.getHostView());
     }
     if(destroy) {
       child.destroy();
@@ -375,12 +400,12 @@ public abstract class WXVContainer extends WXComponent {
   @Override
   public void notifyAppearStateChange(String wxEventType, String direction) {
     super.notifyAppearStateChange(wxEventType, direction);
-    if(getView()==null || mChildren==null){
+    if(getHostView()==null || mChildren==null){
       return;
     }
     for(WXComponent component:mChildren){
-      if(component.getView()!=null && !(component.getView().getVisibility()==View.VISIBLE)){
-        wxEventType=WXEventType.DISAPPEAR;
+      if(component.getHostView()!=null && !(component.getHostView().getVisibility()==View.VISIBLE)){
+        wxEventType= Constants.Event.DISAPPEAR;
       }
       component.notifyAppearStateChange(wxEventType,direction);
     }

@@ -16,6 +16,7 @@
 
 @property (nonatomic, strong) WXBridgeContext   *bridgeCtx;
 @property (nonatomic, assign) BOOL  stopRunning;
+@property (nonatomic, strong) NSMutableArray *instanceIdStack;
 
 @end
 
@@ -41,6 +42,11 @@ static NSThread *WXBridgeThread;
         _bridgeCtx = [[WXBridgeContext alloc] init];
     }
     return self;
+}
+
+- (WXSDKInstance *)topInstance
+{
+    return _bridgeCtx.topInstance;
 }
 
 - (void)unload
@@ -108,7 +114,13 @@ void WXPerformBlockOnBridgeThread(void (^block)())
                   data:(id)data
 {
     if (!instance || !temp) return;
-    
+    if (![self.instanceIdStack containsObject:instance]) {
+        if ([options[@"RENDER_IN_ORDER"] boolValue]) {
+            [self.instanceIdStack addObject:instance];
+        } else {
+            [self.instanceIdStack insertObject:instance atIndex:0];
+        }
+    }
     __weak typeof(self) weakSelf = self;
     WXPerformBlockOnBridgeThread(^(){
         [weakSelf.bridgeCtx createInstance:instance
@@ -118,9 +130,26 @@ void WXPerformBlockOnBridgeThread(void (^block)())
     });
 }
 
+- (NSMutableArray *)instanceIdStack
+{
+    if (_instanceIdStack) return _instanceIdStack;
+    
+    _instanceIdStack = [NSMutableArray array];
+    
+    return _instanceIdStack;
+}
+
+- (NSArray *)getInstanceIdStack;
+{
+    return self.instanceIdStack;
+}
+
 - (void)destroyInstance:(NSString *)instance
 {
     if (!instance) return;
+    if([self.instanceIdStack containsObject:instance]){
+        [self.instanceIdStack removeObject:instance];
+    }
     
     __weak typeof(self) weakSelf = self;
     WXPerformBlockOnBridgeThread(^(){
@@ -209,7 +238,7 @@ void WXPerformBlockOnBridgeThread(void (^block)())
     [self executeJsMethod:method];
 }
 
-- (void)callBack:(NSString *)instanceId funcId:(NSString *)funcId params:(NSString *) params keepAlive:(BOOL)keepAlive {
+- (void)callBack:(NSString *)instanceId funcId:(NSString *)funcId params:(id)params keepAlive:(BOOL)keepAlive {
     NSArray *args = nil;
     if (keepAlive) {
         args = @[[funcId copy], params? [params copy]:@"\"{}\"", @true];
@@ -226,7 +255,7 @@ void WXPerformBlockOnBridgeThread(void (^block)())
     [self executeJsMethod:method];
 }
 
-- (void)callBack:(NSString *)instanceId funcId:(NSString *)funcId params:(NSString *)params
+- (void)callBack:(NSString *)instanceId funcId:(NSString *)funcId params:(id)params
 {
     [self callBack:instanceId funcId:funcId params:params keepAlive:NO];
 }

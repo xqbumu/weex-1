@@ -1,5 +1,7 @@
 # Gesture
 
+> Experiment Feature
+
 Weex encapsulates native touch events to provide a gesture system. Using gesture is similar to use event in Weex. Just set `on` attributes on a node to listen to gesture.
 
 ## Type
@@ -38,6 +40,9 @@ The following properties can be used in gesture callback:
 * `pageY`. The Y coordinate of the touch pointer relative to the top of the document.
 * `screenX`. The X coordinate of the touch point relative to the left edge of the screen.
 * `screenY`. The Y coordinate of the touch point relative to the top edge of the screen.
+
+## Constrain
+Currently, Weex Android do not support listening to gesture on `scroller`, `list` and `webview`, as it would lead a large amount of event conflicting. 
 
 ## How to use
 
